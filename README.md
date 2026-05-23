@@ -1,98 +1,85 @@
 # Discord Panel Bot - Minecraft AFK Bot Control Panel
 
-A professional Discord-based control panel for managing Minecraft AFK bots with role-based slot system.
+A **professional, production-ready Discord bot** for managing Minecraft AFK bots with a beautiful UI, role-based slot system, and real-time monitoring.
 
-## Features
+## ✨ Features
 
-✅ **Discord Integration** - Full bot control via Discord buttons and embeds  
-✅ **Role-Based Slot System** - Dynamic slot allocation based on user roles  
-✅ **Global Slot Limiting** - Manage maximum concurrent bots (default: 40)  
-✅ **Anti-AFK System** - Automatic jump every 30 seconds  
-✅ **Auto Reconnection** - Up to 5 reconnect attempts with configurable delays  
-✅ **Bot Management** - Start, stop, restart, status, delete bots  
-✅ **Security** - Users can only control their own bots  
-✅ **Lightweight** - Optimized for 12GB RAM systems  
-✅ **JSON Database** - Simple file-based persistence  
+✅ **Beautiful Discord UI** - Modern embeds with colors and statuses  
+✅ **Role-Based Slot System** - Dynamic slot allocation per tier  
+✅ **Global Slot Limiting** - Maximum 40 concurrent bots (configurable)  
+✅ **Anti-AFK Protection** - Automatic jumps every 30 seconds  
+✅ **Auto Reconnection** - Up to 5 reconnect attempts with backoff  
+✅ **Real-Time Status** - Uptime tracking & status monitoring  
+✅ **Slash Commands** - Modern `/panel` command  
+✅ **Security** - Users control only their own bots  
+✅ **Error Handling** - Clear error messages & validation  
+✅ **JSON Database** - Simple persistent storage  
 
-## Installation
+## 🚀 Quick Start
 
-### 1. Clone the Repository
+### 1. Clone & Install
 ```bash
 git clone https://github.com/nobmcgm/discord-panel-bot.git
 cd discord-panel-bot
-```
-
-### 2. Install Dependencies
-```bash
 npm install
 ```
 
-### 3. Configure `config.js`
-
-Edit `config.js` and set:
-
-- **Discord Bot Token** - Your bot's token from Discord Developer Portal
-- **Guild ID** - Your Discord server ID
-- **Panel Channel ID** - Channel for the control panel
-- **Role IDs** - ID of each tier role
-
+### 2. Configure
+Edit `config.js`:
 ```javascript
-token: "YOUR_TOKEN_HERE",
-guildId: "YOUR_GUILD_ID",
-panelChannelId: "YOUR_CHANNEL_ID",
+token: "YOUR_BOT_TOKEN",
+guildId: "YOUR_SERVER_ID",
 
 roles: {
   member: { id: "ROLE_ID", slots: 1 },
   vip: { id: "ROLE_ID", slots: 2 },
-  // ... etc
+  // ... add your roles
 }
 ```
 
-### 4. Run the Bot
+### 3. Run
 ```bash
 npm start
 ```
 
-## Usage
+### 4. Use in Discord
+```
+/panel
+```
+
+## 📋 Role Tiers
+
+| Tier | Slots | Use Case |
+|------|-------|----------|
+| Member | 1 | Basic users |
+| VIP | 2 | Supporters |
+| MVP | 3 | Active members |
+| ELITE | 5 | Premium users |
+| ULTIMATE | 7 | VIP+ users |
+| LEGEND | 10 | Top tier |
+| Admin | ∞ | Moderators |
+
+## 🎮 Bot Management
 
 ### Commands
-
-- **`!panel`** - Post the control panel to current channel (Admin only)
+- `/panel` - Open control panel
 
 ### Buttons
+- **Get Started** - Register & view panel
+- **My Bots** - List your bots
+- **System Info** - View server stats
+- **Start Bot** - Create new bot (modal)
+- **Status** - View bot status & uptime
+- **Stop** - Stop running bot
+- **Restart** - Restart bot
+- **Delete** - Delete bot (with confirmation)
 
-- **Register** - Register to the bot panel
-- **My Panel** - View your personal panel
-- **Info** - View system information
-- **Start Bot** - Create and start a new bot
-- **My Bots** - List your active bots
-- **Status** - View bot status
-- **Stop** - Stop a running bot
-- **Restart** - Restart a bot
-- **Delete** - Delete a bot (with confirmation)
-
-## Role Slot System
-
-Default tier structure:
-
-| Role | Slots |
-|------|-------|
-| Member | 1 |
-| VIP | 2 |
-| MVP | 3 |
-| ELITE | 5 |
-| ULTIMATE | 7 |
-| LEGEND | 10 |
-| Admin | Unlimited |
-
-The system automatically uses the **highest tier role** a user has.
-
-## Configuration
+## ⚙️ Configuration
 
 ### Minecraft Settings
 ```javascript
 minecraft: {
-  defaultHost: "nnca.mcsh.io",
+  defaultHost: "play.example.com",
   defaultPort: 25565,
   defaultVersion: "1.21.8"
 }
@@ -101,16 +88,14 @@ minecraft: {
 ### Bot Behavior
 ```javascript
 botBehavior: {
-  antiAfkInterval: 30000,        // 30 seconds
-  jumpDuration: 500,              // 500ms
-  reconnectDelay: 10000,          // 10 seconds
-  maxReconnectAttempts: 5         // 5 attempts
+  antiAfkInterval: 30000,      // 30 seconds
+  jumpDuration: 500,            // 500ms per jump
+  reconnectDelay: 10000,        // 10 seconds
+  maxReconnectAttempts: 5       // 5 attempts
 }
 ```
 
-## Database
-
-Data is stored in `data.json` with the following structure:
+## 📊 Database Structure
 
 ```json
 {
@@ -129,48 +114,52 @@ Data is stored in `data.json` with the following structure:
     }
   },
   "stats": {
-    "totalBotsCreated": 0,
-    "totalBotsRunning": 0
+    "totalBotsCreated": 5,
+    "totalBotsRunning": 3
   }
 }
 ```
 
-## Security
+## 🔒 Security
 
-- Users can only control their own bots
-- Admin role bypasses all slot limits
-- Invalid input validation
-- No duplicate bots allowed
-- Slot limits enforced per user and globally
+✅ Users can only control their own bots  
+✅ Role-based access control  
+✅ Admin bypass for moderation  
+✅ Input validation on all forms  
+✅ No duplicate bots allowed  
+✅ Slot limits enforced globally & per-user  
 
-## Performance
+## 🛠️ Troubleshooting
 
-- **Memory Efficient** - Map-based bot instance tracking
-- **Stable Reconnections** - Prevents reconnect spam
-- **Low CPU Usage** - Lightweight event-based architecture
-- **Scalable** - Supports 40+ concurrent bots
-
-## Troubleshooting
-
-### Bot won't start
-- Check server address and port
-- Verify server is running and accessible
+### Bot won't connect to server
+- Check server is online and accessible
+- Verify IP/hostname and port
 - Check Minecraft version compatibility
+- Look at console logs for detailed errors
 
-### Bots disconnecting frequently
+### Bots keep disconnecting
 - Check network stability
-- Verify server isn't kicking idle players
-- Increase `reconnectDelay` in config
+- Verify server doesn't kick idle players
+- Increase `reconnectDelay` if needed
+- Check server resource limits
 
-### Memory issues
-- Monitor with `node --max-old-space-size=4096 index.js`
-- Reduce `maxGlobalSlots` if needed
-- Check for bot instance leaks in logs
+### Bot token invalid
+- Go to [Discord Developer Portal](https://discord.com/developers/applications)
+- Create new application
+- Go to "Bot" section and copy token
+- Update `config.js`
 
-## License
+## 📦 Requirements
+
+- Node.js 18+
+- discord.js 14+
+- mineflayer 4+
+- 12GB RAM (recommended)
+
+## 📝 License
 
 MIT
 
-## Support
+## 🤝 Support
 
-For issues, create a GitHub issue or contact the developer.
+For issues, open a GitHub issue or check Discord support channel.

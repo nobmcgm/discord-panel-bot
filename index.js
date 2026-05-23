@@ -9,7 +9,8 @@ const {
   TextInputBuilder,
   TextInputStyle,
   SlashCommandBuilder,
-  Routes
+  Routes,
+  Colors
 } = require('discord.js');
 
 const fs = require('fs');
@@ -52,13 +53,10 @@ function saveDB(data) {
 }
 
 let db = loadDB();
-let activeBots = new Map(); // userId -> Array of bot instances
+let activeBots = new Map();
 
 // ===== UTILITY FUNCTIONS =====
 
-/**
- * Get user's highest role slot limit
- */
 function getUserSlotLimit(member) {
   if (!member) return 0;
 
@@ -74,16 +72,9 @@ function getUserSlotLimit(member) {
     }
   }
 
-  if (config.debug) {
-    console.log(`[SLOTS] User ${member.user.username}: ${maxSlots} slots (role: ${highestRole})`);
-  }
-
   return maxSlots;
 }
 
-/**
- * Count all active bots across all users
- */
 function getGlobalActiveBots() {
   let count = 0;
   activeBots.forEach(userBots => {
@@ -92,17 +83,11 @@ function getGlobalActiveBots() {
   return count;
 }
 
-/**
- * Count user's active bots
- */
 function getUserActiveBots(userId) {
   const userBots = activeBots.get(userId) || [];
   return userBots.filter(b => b.getStatus().running).length;
 }
 
-/**
- * Get user database entry
- */
 function getUserData(userId) {
   if (!db.users[userId]) {
     db.users[userId] = {
@@ -114,62 +99,69 @@ function getUserData(userId) {
   return db.users[userId];
 }
 
-/**
- * Create main control panel embed
- */
+function getUptime(startedAt) {
+  const uptime = Date.now() - new Date(startedAt).getTime();
+  const hours = Math.floor(uptime / (1000 * 60 * 60));
+  const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+  return `${hours}h ${minutes}m`;
+}
+
+// ===== EMBED BUILDERS =====
+
 function createPanelEmbed() {
   const globalActive = getGlobalActiveBots();
   const availableSlots = config.maxGlobalSlots - globalActive;
+  const percentage = Math.round((globalActive / config.maxGlobalSlots) * 100);
 
   return new EmbedBuilder()
-    .setColor('#1f8b4c')
+    .setColor(Colors.Green)
     .setTitle('🤖 Minecraft AFK Bot Control Panel')
-    .setDescription('Manage your Minecraft AFK bots directly from Discord')
+    .setDescription('Manage your Minecraft AFK bots with ease')
     .addFields(
       {
         name: '📊 System Status',
-        value: `✅ Backend: Online\n🤖 Active Bots: ${globalActive}/${config.maxGlobalSlots}\n📌 Available Slots: ${availableSlots}`,
-        inline: true
+        value: `✅ **Backend:** Online\n🤖 **Active Bots:** ${globalActive}/${config.maxGlobalSlots} (${percentage}%)\n📌 **Available Slots:** ${availableSlots}`,
+        inline: false
       },
       {
         name: '⚙️ Features',
-        value: `✅ Anti-AFK Enabled\n✅ Auto Reconnect\n✅ Role-Based System`,
-        inline: true
+        value: `✅ Anti-AFK System (30s jumps)\n✅ Auto Reconnect (5 attempts)\n✅ Role-Based Slot System\n✅ Real-Time Status Updates`,
+        inline: false
       },
       {
-        name: '📋 Role Slot System',
+        name: '📋 Subscription Tiers',
         value: Object.entries(config.roles)
-          .map(([, role]) => `• **${role.name}**: ${role.slots === Infinity ? 'Unlimited' : role.slots} slot${role.slots !== 1 ? 's' : ''}`)
+          .map(([, role]) => `**${role.name}** → ${role.slots === Infinity ? '∞ Slots' : `${role.slots} Slot${role.slots !== 1 ? 's' : ''}`}`)
           .join('\n'),
         inline: false
       }
     )
     .setFooter({
-      text: 'Click buttons below to manage your bots',
+      text: 'Click buttons to get started',
       iconURL: 'https://www.minecraft.net/favicon.ico'
     })
     .setTimestamp();
 }
 
-/**
- * Create user panel embed
- */
 function createUserPanelEmbed(userId, member) {
   const userData = getUserData(userId);
   const slotLimit = getUserSlotLimit(member);
   const activeBotCount = getUserActiveBots(userId);
+  const totalBots = userData.bots.length;
 
-  let botList = '```No bots registered```';
+  let botList = '```No bots yet - Click Start Bot to create one!```';
   if (userData.bots.length > 0) {
     botList = userData.bots.map((bot, idx) => {
       const status = bot.running ? '🟢' : '🔴';
-      return `${idx + 1}. ${status} ${bot.username} @ ${bot.host}:${bot.port}`;
+      const uptime = bot.running ? getUptime(bot.startedAt) : 'N/A';
+      return `${idx + 1}. ${status} **${bot.username}** @ ${bot.host}:${bot.port}\n   ⏱️ ${uptime}`;
     }).join('\n');
   }
 
   return new EmbedBuilder()
-    .setColor('#1f8b4c')
+    .setColor(Colors.Blue)
     .setTitle(`🤖 ${member.user.username}'s Bot Panel`)
+    .setThumbnail(member.user.displayAvatarURL())
     .addFields(
       {
         name: '📊 Slot Usage',
@@ -178,7 +170,7 @@ function createUserPanelEmbed(userId, member) {
       },
       {
         name: '🤖 Total Bots',
-        value: userData.bots.length.toString(),
+        value: `${totalBots} bot${totalBots !== 1 ? 's' : ''}`,
         inline: true
       },
       {
@@ -191,18 +183,39 @@ function createUserPanelEmbed(userId, member) {
     .setTimestamp();
 }
 
+function createSuccessEmbed(title, description) {
+  return new EmbedBuilder()
+    .setColor(Colors.Green)
+    .setTitle(`✅ ${title}`)
+    .setDescription(description)
+    .setTimestamp();
+}
+
+function createErrorEmbed(title, description) {
+  return new EmbedBuilder()
+    .setColor(Colors.Red)
+    .setTitle(`❌ ${title}`)
+    .setDescription(description)
+    .setTimestamp();
+}
+
+function createWarningEmbed(title, description) {
+  return new EmbedBuilder()
+    .setColor(Colors.Orange)
+    .setTitle(`⚠️ ${title}`)
+    .setDescription(description)
+    .setTimestamp();
+}
+
 // ===== BUTTON HANDLERS =====
 
-/**
- * Register user for bot panel
- */
 async function handleRegister(interaction) {
   const userId = interaction.user.id;
   const userData = getUserData(userId);
 
   if (userData.bots.length > 0) {
     return interaction.reply({
-      content: '✅ You are already registered!',
+      embeds: [createSuccessEmbed('Already Registered', 'You are already set up! Click **My Panel** to manage your bots.')],
       ephemeral: true
     });
   }
@@ -217,9 +230,6 @@ async function handleRegister(interaction) {
   });
 }
 
-/**
- * Show start bot modal
- */
 async function handleStartBotModal(interaction) {
   const modal = new ModalBuilder()
     .setCustomId(`startbot_${interaction.user.id}`)
@@ -232,14 +242,16 @@ async function handleStartBotModal(interaction) {
         .setLabel('Bot Username')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('e.g., AFKBot123')
+        .setMinLength(3)
+        .setMaxLength(16)
         .setRequired(true)
     ),
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
         .setCustomId('server_host')
-        .setLabel('Server Host')
+        .setLabel('Server Host / IP')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder(config.minecraft.defaultHost)
+        .setPlaceholder('e.g., play.example.com')
         .setValue(config.minecraft.defaultHost)
         .setRequired(true)
     ),
@@ -257,9 +269,6 @@ async function handleStartBotModal(interaction) {
   return interaction.showModal(modal);
 }
 
-/**
- * Start bot from modal submission
- */
 async function handleStartBotSubmit(interaction) {
   const userId = interaction.user.id;
   const userData = getUserData(userId);
@@ -272,42 +281,53 @@ async function handleStartBotSubmit(interaction) {
   // Validation
   if (!botUsername || botUsername.length < 3 || botUsername.length > 16) {
     return interaction.reply({
-      content: '❌ Username must be 3-16 characters',
+      embeds: [createErrorEmbed('Invalid Username', 'Username must be 3-16 characters long.')],
       ephemeral: true
     });
   }
 
   if (isNaN(serverPort) || serverPort < 1 || serverPort > 65535) {
     return interaction.reply({
-      content: '❌ Port must be between 1-65535',
+      embeds: [createErrorEmbed('Invalid Port', 'Port must be a number between 1-65535.')],
       ephemeral: true
     });
   }
 
-  // Check for duplicate bot
+  if (!serverHost || serverHost.length < 3) {
+    return interaction.reply({
+      embeds: [createErrorEmbed('Invalid Host', 'Please provide a valid server host or IP address.')],
+      ephemeral: true
+    });
+  }
+
   if (userData.bots.some(b => b.username === botUsername && b.host === serverHost)) {
     return interaction.reply({
-      content: '❌ You already have a bot with this username on this server',
+      embeds: [createErrorEmbed('Duplicate Bot', `You already have a bot named **${botUsername}** on this server.`)],
       ephemeral: true
     });
   }
 
-  // Check slot limit
   const slotLimit = getUserSlotLimit(member);
   const activeBotCount = getUserActiveBots(userId);
 
-  if (slotLimit !== Infinity && activeBotCount >= slotLimit) {
+  if (slotLimit === 0) {
     return interaction.reply({
-      content: `❌ You have reached your slot limit (${activeBotCount}/${slotLimit})`,
+      embeds: [createErrorEmbed('No Access', 'You do not have any roles that grant bot slots. Contact admin.')],
       ephemeral: true
     });
   }
 
-  // Check global slots
+  if (slotLimit !== Infinity && activeBotCount >= slotLimit) {
+    return interaction.reply({
+      embeds: [createWarningEmbed('Slot Limit Reached', `You have reached your slot limit: **${activeBotCount}/${slotLimit}**\n\nUpgrade your role to create more bots.`)],
+      ephemeral: true
+    });
+  }
+
   const globalActive = getGlobalActiveBots();
   if (globalActive >= config.maxGlobalSlots) {
     return interaction.reply({
-      content: `❌ Server is full! (${globalActive}/${config.maxGlobalSlots} bots running)`,
+      embeds: [createWarningEmbed('Server Full', `The server is at maximum capacity: **${globalActive}/${config.maxGlobalSlots}** bots.\n\nTry again later.`)],
       ephemeral: true
     });
   }
@@ -315,7 +335,6 @@ async function handleStartBotSubmit(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
   try {
-    // Create mineflayer bot
     const botInstance = createMineflayerBot({
       host: serverHost,
       port: serverPort,
@@ -327,16 +346,13 @@ async function handleStartBotSubmit(interaction) {
       }
     });
 
-    // Start the bot
     await botInstance.start();
 
-    // Store bot instance
     if (!activeBots.has(userId)) {
       activeBots.set(userId, []);
     }
     activeBots.get(userId).push(botInstance);
 
-    // Store in database
     const botData = {
       username: botUsername,
       host: serverHost,
@@ -349,27 +365,22 @@ async function handleStartBotSubmit(interaction) {
     db.stats.totalBotsCreated++;
     saveDB(db);
 
-    // Update panel
     const embed = createUserPanelEmbed(userId, member);
     const row = createUserButtons(userId);
 
     return interaction.editReply({
-      content: `✅ Bot **${botUsername}** started successfully!`,
-      embeds: [embed],
+      embeds: [createSuccessEmbed('Bot Started', `**${botUsername}** is now running on **${serverHost}:${serverPort}**!`)],
       components: [row]
     });
 
   } catch (err) {
     console.error('[BOT] Start error:', err);
     return interaction.editReply({
-      content: `❌ Failed to start bot: ${err.message}`
+      embeds: [createErrorEmbed('Connection Failed', `Could not connect to **${serverHost}:${serverPort}**\n\n**Error:** ${err.message}\n\nMake sure the server is online and accessible.`)]
     });
   }
 }
 
-/**
- * Stop specific bot
- */
 async function handleStopBot(interaction, botIndex) {
   const userId = interaction.user.id;
   const userData = getUserData(userId);
@@ -377,13 +388,12 @@ async function handleStopBot(interaction, botIndex) {
 
   if (!userData.bots[botIndex]) {
     return interaction.reply({
-      content: '❌ Bot not found',
+      embeds: [createErrorEmbed('Bot Not Found', 'This bot no longer exists.')],
       ephemeral: true
     });
   }
 
   const botName = userData.bots[botIndex].username;
-
   await interaction.deferReply({ ephemeral: true });
 
   try {
@@ -400,22 +410,18 @@ async function handleStopBot(interaction, botIndex) {
     const row = createUserButtons(userId);
 
     return interaction.editReply({
-      content: `✅ Bot **${botName}** stopped!`,
-      embeds: [embed],
+      embeds: [createSuccessEmbed('Bot Stopped', `**${botName}** has been stopped.`)],
       components: [row]
     });
 
   } catch (err) {
     console.error('[BOT] Stop error:', err);
     return interaction.editReply({
-      content: `❌ Failed to stop bot: ${err.message}`
+      embeds: [createErrorEmbed('Stop Failed', `Could not stop **${botName}**.\n\n**Error:** ${err.message}`)]
     });
   }
 }
 
-/**
- * Restart specific bot
- */
 async function handleRestartBot(interaction, botIndex) {
   const userId = interaction.user.id;
   const userData = getUserData(userId);
@@ -423,7 +429,7 @@ async function handleRestartBot(interaction, botIndex) {
 
   if (!userData.bots[botIndex]) {
     return interaction.reply({
-      content: '❌ Bot not found',
+      embeds: [createErrorEmbed('Bot Not Found', 'This bot no longer exists.')],
       ephemeral: true
     });
   }
@@ -437,33 +443,32 @@ async function handleRestartBot(interaction, botIndex) {
       await userBots[botIndex].restart();
     }
 
+    userData.bots[botIndex].startedAt = new Date().toISOString();
+    saveDB(db);
+
     const embed = createUserPanelEmbed(userId, member);
     const row = createUserButtons(userId);
 
     return interaction.editReply({
-      content: `✅ Bot **${botName}** restarted!`,
-      embeds: [embed],
+      embeds: [createSuccessEmbed('Bot Restarted', `**${botName}** has been restarted successfully.`)],
       components: [row]
     });
 
   } catch (err) {
     console.error('[BOT] Restart error:', err);
     return interaction.editReply({
-      content: `❌ Failed to restart bot: ${err.message}`
+      embeds: [createErrorEmbed('Restart Failed', `Could not restart **${botName}**.\n\n**Error:** ${err.message}`)]
     });
   }
 }
 
-/**
- * Show status for specific bot
- */
 async function handleBotStatus(interaction, botIndex) {
   const userId = interaction.user.id;
   const userData = getUserData(userId);
 
   if (!userData.bots[botIndex]) {
     return interaction.reply({
-      content: '❌ Bot not found',
+      embeds: [createErrorEmbed('Bot Not Found', 'This bot no longer exists.')],
       ephemeral: true
     });
   }
@@ -471,28 +476,29 @@ async function handleBotStatus(interaction, botIndex) {
   const bot = userData.bots[botIndex];
   const userBots = activeBots.get(userId) || [];
   const botInstance = userBots[botIndex];
+  const isRunning = botInstance && botInstance.getStatus().running;
 
   let statusEmbed = new EmbedBuilder()
-    .setColor(botInstance && botInstance.getStatus().running ? '#00ff00' : '#ff0000')
-    .setTitle(`📊 Bot Status: ${bot.username}`)
+    .setColor(isRunning ? Colors.Green : Colors.Red)
+    .setTitle(`📊 ${bot.username} Status`)
     .addFields(
       {
-        name: 'Status',
-        value: botInstance && botInstance.getStatus().running ? '🟢 Online' : '🔴 Offline',
+        name: '🔌 Status',
+        value: isRunning ? '🟢 **Online**' : '🔴 **Offline**',
         inline: true
       },
       {
-        name: 'Username',
+        name: '👤 Username',
         value: bot.username,
         inline: true
       },
       {
-        name: 'Server',
+        name: '🌐 Server',
         value: `${bot.host}:${bot.port}`,
         inline: true
       },
       {
-        name: 'Started',
+        name: '📅 Started',
         value: new Date(bot.startedAt).toLocaleString(),
         inline: true
       }
@@ -502,12 +508,17 @@ async function handleBotStatus(interaction, botIndex) {
     const status = botInstance.getStatus();
     statusEmbed.addFields(
       {
-        name: 'Reconnect Count',
-        value: status.reconnectCount.toString(),
+        name: '⏱️ Uptime',
+        value: getUptime(bot.startedAt),
         inline: true
       },
       {
-        name: 'Anti-AFK',
+        name: '🔄 Reconnect Count',
+        value: `${status.reconnectCount}/5`,
+        inline: true
+      },
+      {
+        name: '⚙️ Anti-AFK',
         value: status.antiAFKEnabled ? '✅ Enabled' : '❌ Disabled',
         inline: true
       }
@@ -520,17 +531,13 @@ async function handleBotStatus(interaction, botIndex) {
   });
 }
 
-/**
- * Delete specific bot
- */
 async function handleDeleteBot(interaction, botIndex) {
   const userId = interaction.user.id;
   const userData = getUserData(userId);
-  const member = await interaction.guild.members.fetch(userId);
 
   if (!userData.bots[botIndex]) {
     return interaction.reply({
-      content: '❌ Bot not found',
+      embeds: [createErrorEmbed('Bot Not Found', 'This bot no longer exists.')],
       ephemeral: true
     });
   }
@@ -548,15 +555,12 @@ async function handleDeleteBot(interaction, botIndex) {
   );
 
   return interaction.reply({
-    content: `⚠️ Are you sure you want to delete **${botName}**? This action cannot be undone.`,
+    embeds: [createWarningEmbed('Delete Bot', `Are you sure you want to delete **${botName}**?\n\nThis action **cannot be undone**.`)],
     components: [confirmRow],
     ephemeral: true
   });
 }
 
-/**
- * Confirm deletion
- */
 async function handleConfirmDelete(interaction, botIndex) {
   const userId = interaction.user.id;
   const userData = getUserData(userId);
@@ -564,7 +568,7 @@ async function handleConfirmDelete(interaction, botIndex) {
 
   if (!userData.bots[botIndex]) {
     return interaction.reply({
-      content: '❌ Bot not found',
+      embeds: [createErrorEmbed('Bot Not Found', 'This bot no longer exists.')],
       ephemeral: true
     });
   }
@@ -574,14 +578,12 @@ async function handleConfirmDelete(interaction, botIndex) {
   try {
     const botName = userData.bots[botIndex].username;
     
-    // Stop bot if running
     const userBots = activeBots.get(userId) || [];
     if (userBots[botIndex]) {
       await userBots[botIndex].stop();
       userBots.splice(botIndex, 1);
     }
 
-    // Remove from database
     userData.bots.splice(botIndex, 1);
     saveDB(db);
 
@@ -589,47 +591,40 @@ async function handleConfirmDelete(interaction, botIndex) {
     const row = createUserButtons(userId);
 
     return interaction.editReply({
-      content: `✅ Bot **${botName}** deleted successfully!`,
-      embeds: [embed],
+      embeds: [createSuccessEmbed('Bot Deleted', `**${botName}** has been permanently deleted.`)],
       components: [row]
     });
 
   } catch (err) {
     console.error('[BOT] Delete error:', err);
     return interaction.editReply({
-      content: `❌ Failed to delete bot: ${err.message}`
+      embeds: [createErrorEmbed('Delete Failed', `Could not delete bot.\n\n**Error:** ${err.message}`)]
     });
   }
 }
 
 // ===== BUTTON ROW BUILDERS =====
 
-/**
- * Create main panel buttons
- */
 function createMainPanelButtons() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('register')
-      .setLabel('Register')
+      .setLabel('Get Started')
       .setStyle(ButtonStyle.Success)
       .setEmoji('📋'),
     new ButtonBuilder()
       .setCustomId('my_panel')
-      .setLabel('My Panel')
+      .setLabel('My Bots')
       .setStyle(ButtonStyle.Primary)
       .setEmoji('🎮'),
     new ButtonBuilder()
       .setCustomId('info')
-      .setLabel('Info')
+      .setLabel('System Info')
       .setStyle(ButtonStyle.Secondary)
       .setEmoji('ℹ️')
   );
 }
 
-/**
- * Create user panel buttons
- */
 function createUserButtons(userId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -639,9 +634,9 @@ function createUserButtons(userId) {
       .setEmoji('▶️'),
     new ButtonBuilder()
       .setCustomId(`my_bots_${userId}`)
-      .setLabel('My Bots')
+      .setLabel('Refresh')
       .setStyle(ButtonStyle.Primary)
-      .setEmoji('📋'),
+      .setEmoji('🔄'),
     new ButtonBuilder()
       .setCustomId(`back_${userId}`)
       .setLabel('Back')
@@ -653,14 +648,17 @@ function createUserButtons(userId) {
 // ===== CLIENT EVENTS =====
 
 client.once('ready', async () => {
+  console.log(`\n${'═'.repeat(50)}`);
   console.log(`[READY] ${client.user.tag} is online!`);
-  client.user.setActivity('🤖 Minecraft AFK Bots', { type: 'WATCHING' });
+  console.log(`[INFO] Bot is ready in guild: ${config.guildId}`);
+  console.log(`${'═'.repeat(50)}\n`);
+  
+  client.user.setActivity('🤖 Minecraft AFK Bots | /panel', { type: 'WATCHING' });
 
-  // Register slash commands
   const commands = [
     new SlashCommandBuilder()
       .setName('panel')
-      .setDescription('📋 Show the Minecraft AFK Bot control panel')
+      .setDescription('📋 Open the Minecraft AFK Bot control panel')
   ];
 
   const rest = new REST({ version: '10' }).setToken(config.token);
@@ -671,9 +669,9 @@ client.once('ready', async () => {
       Routes.applicationGuildCommands(client.user.id, config.guildId),
       { body: commands.map(cmd => cmd.toJSON()) }
     );
-    console.log('[COMMANDS] Slash commands registered!');
+    console.log('[COMMANDS] ✅ Slash commands registered!\n');
   } catch (err) {
-    console.error('[COMMANDS] Failed to register:', err);
+    console.error('[COMMANDS] ❌ Failed to register:', err);
   }
 });
 
@@ -693,7 +691,6 @@ client.on('interactionCreate', async (interaction) => {
       const customId = interaction.customId;
       const userId = interaction.user.id;
 
-      // Main panel buttons
       if (customId === 'register') {
         await handleRegister(interaction);
       }
@@ -708,18 +705,14 @@ client.on('interactionCreate', async (interaction) => {
         const row = createMainPanelButtons();
         return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
       }
-
-      // Start bot modal
       else if (customId.startsWith('startbot_modal_')) {
         await handleStartBotModal(interaction);
       }
-
-      // My bots list
       else if (customId.startsWith('my_bots_')) {
         const userData = getUserData(userId);
         if (userData.bots.length === 0) {
           return interaction.reply({
-            content: '❌ You have no bots. Click **Start Bot** to create one!',
+            embeds: [createWarningEmbed('No Bots', 'You have no bots yet. Click **Start Bot** to create one!')],
             ephemeral: true
           });
         }
@@ -754,7 +747,7 @@ client.on('interactionCreate', async (interaction) => {
         });
 
         const embed = new EmbedBuilder()
-          .setColor('#1f8b4c')
+          .setColor(Colors.Blue)
           .setTitle(`📋 Your Bots (${userData.bots.length})`)
           .setDescription(userData.bots.map((b, i) => `${i + 1}. **${b.username}** @ ${b.host}:${b.port}`).join('\n'));
 
@@ -764,8 +757,6 @@ client.on('interactionCreate', async (interaction) => {
           ephemeral: true
         });
       }
-
-      // Bot control buttons
       else if (customId.startsWith('stop_')) {
         const [, , botIndex] = customId.split('_');
         await handleStopBot(interaction, parseInt(botIndex));
@@ -788,7 +779,7 @@ client.on('interactionCreate', async (interaction) => {
       }
       else if (customId.startsWith('cancel_delete_')) {
         return interaction.reply({
-          content: '✅ Deletion cancelled',
+          embeds: [createSuccessEmbed('Cancelled', 'Bot deletion cancelled.')],
           ephemeral: true
         });
       }
@@ -799,8 +790,6 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
       }
     }
-
-    // Modal submissions
     else if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith('startbot_')) {
         await handleStartBotSubmit(interaction);
@@ -812,11 +801,11 @@ client.on('interactionCreate', async (interaction) => {
     try {
       if (interaction.replied || interaction.deferred) {
         await interaction.editReply({
-          content: `❌ An error occurred: ${err.message}`
+          embeds: [createErrorEmbed('Error', `Something went wrong: ${err.message}`)]
         });
       } else {
         await interaction.reply({
-          content: `❌ An error occurred: ${err.message}`,
+          embeds: [createErrorEmbed('Error', `Something went wrong: ${err.message}`)],
           ephemeral: true
         });
       }
@@ -826,5 +815,4 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// ===== LOGIN =====
 client.login(config.token);
