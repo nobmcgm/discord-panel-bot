@@ -7,13 +7,16 @@ const {
   ButtonStyle,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  SlashCommandBuilder,
+  Routes
 } = require('discord.js');
 
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { createMineflayerBot } = require('./bot');
+const { REST } = require('discord.js');
 
 // ===== INITIALIZE CLIENT =====
 const client = new Client({
@@ -649,14 +652,44 @@ function createUserButtons(userId) {
 
 // ===== CLIENT EVENTS =====
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`[READY] ${client.user.tag} is online!`);
   client.user.setActivity('🤖 Minecraft AFK Bots', { type: 'WATCHING' });
+
+  // Register slash commands
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('panel')
+      .setDescription('📋 Show the Minecraft AFK Bot control panel')
+  ];
+
+  const rest = new REST({ version: '10' }).setToken(config.token);
+
+  try {
+    console.log('[COMMANDS] Registering slash commands...');
+    await rest.put(
+      Routes.applicationGuildCommands(client.user.id, config.guildId),
+      { body: commands.map(cmd => cmd.toJSON()) }
+    );
+    console.log('[COMMANDS] Slash commands registered!');
+  } catch (err) {
+    console.error('[COMMANDS] Failed to register:', err);
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    if (interaction.isButton()) {
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === 'panel') {
+        const embed = createPanelEmbed();
+        const row = createMainPanelButtons();
+        return interaction.reply({
+          embeds: [embed],
+          components: [row]
+        });
+      }
+    }
+    else if (interaction.isButton()) {
       const customId = interaction.customId;
       const userId = interaction.user.id;
 
@@ -790,33 +823,6 @@ client.on('interactionCreate', async (interaction) => {
     } catch (replyErr) {
       console.error('[ERROR] Failed to send error message:', replyErr);
     }
-  }
-});
-
-// ===== STARTUP COMMAND =====
-
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  if (!message.content.startsWith('!')) return;
-
-  const args = message.content.slice(1).split(/ +/);
-  const command = args.shift().toLowerCase();
-
-  // Admin command to post main panel
-  if (command === 'panel') {
-    if (!message.member.permissions.has('Administrator')) {
-      return message.reply('❌ Administrator required');
-    }
-
-    const embed = createPanelEmbed();
-    const row = createMainPanelButtons();
-
-    await message.channel.send({
-      embeds: [embed],
-      components: [row]
-    });
-
-    return message.react('✅');
   }
 });
 
