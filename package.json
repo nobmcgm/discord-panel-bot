@@ -1,0 +1,26 @@
+{
+  "name": "discord-panel-bot",
+  "version": "1.0.0",
+  "description": "Professional Minecraft AFK Bot Discord Control Panel",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "minecraft",
+    "discord",
+    "bot",
+    "control-panel",
+    "afk"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "mineflayer": "^4.11.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
